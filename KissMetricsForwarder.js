@@ -9,66 +9,34 @@
     },
     isInitialized = false,
     forwarderSettings,
-    name = 'KISSmetricsForwarder';
+    name = 'KISSmetricsForwarder',
+    reportingService,
+    id = null;
 
     function getEventTypeName(eventType) {
-        switch (eventType) {
-            case window.mParticle.EventType.Navigation:
-                return 'Navigation';
-            case window.mParticle.EventType.Location:
-                return 'Location';
-            case window.mParticle.EventType.Search:
-                return 'Search';
-            case window.mParticle.EventType.Transaction:
-                return 'Transaction';
-            case window.mParticle.EventType.UserContent:
-                return 'User Content';
-            case window.mParticle.EventType.UserPreference:
-                return 'User Preference';
-            case window.mParticle.EventType.Social:
-                return 'Social';
-            default:
-                return 'Other';
-        }
+        return mParticle.EventType.getName(eventType);
     }
 
     function getIdentityTypeName(identityType) {
-        switch (identityType) {
-            case window.Particle.IdentityType.CustomerId:
-                return 'Customer ID';
-            case window.mParticle.IdentityType.Facebook:
-                return 'Facebook ID';
-            case window.mParticle.IdentityType.Twitter:
-                return 'Twitter ID';
-            case window.mParticle.IdentityType.Google:
-                return 'Google ID';
-            case window.mParticle.IdentityType.Microsoft:
-                return 'Microsoft ID';
-            case window.mParticle.IdentityType.Yahoo:
-                return 'Yahoo ID';
-            case window.mParticle.IdentityType.Email:
-                return 'Email';
-            case window.mParticle.IdentityType.Alias:
-                return 'Alias ID';
-            case window.mParticle.IdentityType.FacebookCustomAudienceId:
-                return 'Facebook App User ID';
-            default:
-                return 'Other ID';
-        }
+        return mParticle.IdentityType.getName(identityType);
     }
 
     function processEvent(event) {
         if (isInitialized) {
             try {
-                if (event.dt == MessageType.PageEvent ||
-                    event.dt == MessageType.PageView) {
-                    if (event.et == window.mParticle.EventType.Transaction) {
+                if (event.EventDataType == MessageType.PageEvent || event.EventDataType == MessageType.PageView) {
+                    if (event.EventCategory == window.mParticle.EventType.Transaction) {
                         logTransaction(event);
                     }
                     else {
                         logEvent(event);
                     }
+
+                    if (reportingService) {
+                        reportingService(id, event);
+                    }
                 }
+
                 return 'Successfully sent to ' + name;
             }
             catch (e) {
@@ -86,8 +54,10 @@
                     var attributeDict = {};
                     attributeDict[key] = value;
                     _kmq.push(['set', attributeDict]);
+
                     return 'Successfully called SET API on ' + name;
-                } catch (e) {
+                }
+                catch (e) {
                     return 'Failed to call SET API on ' + name + ' ' + e;
                 }
             }
@@ -98,45 +68,55 @@
 
     function setUserIdentity(id, type) {
         if (isInitialized) {
-            if (forwarderSettings.useCustomerId.toLowerCase() == 'true' && type == window.mParticle.IdentityType.CustomerId) {
+            if (forwarderSettings.useCustomerId.toLowerCase() == 'true' &&
+                type == window.mParticle.IdentityType.CustomerId) {
+
                 try {
                     _kmq.push(['identify', id]);
                     return 'Successfull called IDENTITY API on ' + name;
-                } catch (e) {
+                }
+                catch (e) {
                     return 'Failed to call IDENTITY API on ' + name + ' ' + e;
                 }
-            } else {
+            }
+            else {
                 setUserAttribute(getIdentityTypeName(type), id);
             }
-        } else {
+        }
+        else {
             return 'Can\'t call setUserIdentity on forwarder ' + name + ', not initialized';
         }
     }
 
     function logEvent(data) {
 
-        data.attrs = data.attrs || {};
-        data.attrs['MPEventType'] = getEventTypeName(data.et);
+        data.EventAttributes = data.EventAttributes || {};
+        data.EventAttributes['MPEventType'] = getEventTypeName(data.EventCategory);
 
         _kmq.push(['record',
-            data.n,
-            data.attrs]);
+            data.EventName,
+            data.EventAttributes]);
 
     }
 
     function logTransaction(data) {
-        if (data.attrs && data.attrs.$MethodName && data.attrs.$MethodName === 'LogEcommerceTransaction') {
+        if (data.EventAttributes &&
+            data.EventAttributes.$MethodName &&
+            data.EventAttributes.$MethodName === 'LogEcommerceTransaction') {
+
             // User used logTransaction method, set the event name
-            data.n = 'Purchased';
+            data.EventName = 'Purchased';
         }
 
         logEvent(data);
     }
 
+    function initForwarder(settings, service, moduleId) {
+        forwarderSettings = settings;
+        reportingService = service;
+        id = moduleId;
 
-    function initForwarder(settings) {
         try {
-            forwarderSettings = settings;
             function _kms(u) {
                 setTimeout(function () {
                     var d = document, f = d.getElementsByTagName('script')[0],
