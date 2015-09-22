@@ -5,13 +5,15 @@
         PageView: 3,
         PageEvent: 4,
         CrashReport: 5,
-        OptOut: 6
+        OptOut: 6,
+        Commerce: 16
     },
     isInitialized = false,
     forwarderSettings,
     name = 'KISSmetricsForwarder',
     reportingService,
-    id = null;
+    id = null,
+    isTesting = false;
 
     function getEventTypeName(eventType) {
         return mParticle.EventType.getName(eventType);
@@ -19,6 +21,12 @@
 
     function getIdentityTypeName(identityType) {
         return mParticle.IdentityType.getName(identityType);
+    }
+
+    function reportEvent(event) {
+        if (reportingService) {
+            reportingService(id, event);
+        }
     }
 
     function processEvent(event) {
@@ -32,9 +40,11 @@
                         logEvent(event);
                     }
 
-                    if (reportingService) {
-                        reportingService(id, event);
-                    }
+                    reportEvent(event);
+                }
+                else if(event.EventDataType == MessageType.Commerce) {
+                    logCommerceEvent(event);
+                    reportEvent(event);
                 }
 
                 return 'Successfully sent to ' + name;
@@ -89,14 +99,12 @@
     }
 
     function logEvent(data) {
-
         data.EventAttributes = data.EventAttributes || {};
         data.EventAttributes['MPEventType'] = getEventTypeName(data.EventCategory);
 
         _kmq.push(['record',
             data.EventName,
             data.EventAttributes]);
-
     }
 
     function logTransaction(data) {
@@ -111,10 +119,101 @@
         logEvent(data);
     }
 
-    function initForwarder(settings, service, moduleId) {
+    function logProductData(productList) {
+        if(productList && productList.length > 0) {
+            _kmq.push(function() {
+                productList.forEach(function(product) {
+                    KM.set( {
+                        'Product SKU': product.Sku,
+                        'Product Name': product.Name,
+                        'Category': product.Category,
+                        'Quantity': product.Quantity,
+                        'Price': product.Price,
+                        '_t': KM.ts(),
+                        '_d': 1
+                    });
+                });
+            });
+        }
+    }
+
+    function logCommerceEvent(data) {
+        var eventName,
+            attributes;
+
+        if(data.ProductAction) {
+            eventName = 'Product ' + mParticle.ProductActionType.getName(
+                data.ProductAction.ProductActionType);
+
+            if(data.ProductAction.TransactionId) {
+                attributes = {
+                    'Order ID':data.ProductAction.TransactionId,
+                    'Order Total':data.ProductAction.TotalAmount,
+                    'Order Tax': data.ProductAction.TaxAmount,
+                    'Order Shipping': data.ProductAction.ShippingAmount
+                }
+            }
+            else if(data.ProductAction.CheckoutStep) {
+                attributes = {
+                    'Checkout Step': data.ProductAction.CheckoutStep,
+                    'Checkout Options': data.ProductAction.CheckoutOptions
+                };
+            }
+
+            logProductData(data.ProductAction.ProductList);
+
+            if(attributes) {
+                _kmq.push(['record', eventName, attributes]);
+            }
+            else {
+                _kmq.push(['record', eventName]);
+            }
+        }
+        else if(data.PromotionAction) {
+            eventName = mParticle.PromotionType.getName(
+                data.PromotionAction.PromotionActionType);
+
+            if(data.PromotionAction.PromotionList) {
+                _kmq.push(function () {
+                    data.PromotionAction.PromotionList.forEach(function(promotion) {
+                        KM.set({
+                            'Promotion Id': promotion.Id,
+                            'Promotion Name': promotion.Name,
+                            'Promotion Creative': promotion.Creative,
+                            'Promotion Position': promotion.Position,
+                            '_t':KM.ts(),
+                            '_d':1
+                        });
+                    });
+                });
+            }
+
+            _kmq.push(['record', eventName]);
+        }
+        else if(data.ProductImpressions) {
+            eventName = 'Product Impression';
+
+            _kmq.push(function () {
+                data.ProductImpressions.forEach(function(impression) {
+                    KM.set({
+                        'Impression Name': impression.Name,
+                        '_t': KM.ts(),
+                        '_d': 1
+                    });
+
+                    logProductData(impression.ProductList);
+                });
+            });
+
+            _kmq.push(['record', eventName]);
+        }
+    }
+
+    function initForwarder(settings, service, moduleId, testMode) {
         forwarderSettings = settings;
         reportingService = service;
         id = moduleId;
+        isTesting = testMode;
 
         try {
             function _kms(u) {
@@ -127,8 +226,11 @@
             }
 
             var protocol = forwarderSettings.useSecure == 'True' ? 'https:' : '';
-            _kms(protocol + '//i.kissmetrics.com/i.js');
-            _kms(protocol + '//doug1izaerwt3.cloudfront.net/' + forwarderSettings.apiKey + '.1.js');
+
+            if(testMode !== true) {
+                _kms(protocol + '//i.kissmetrics.com/i.js');
+                _kms(protocol + '//doug1izaerwt3.cloudfront.net/' + forwarderSettings.apiKey + '.1.js');
+            }
 
             isInitialized = true;
 
