@@ -8,238 +8,247 @@
         OptOut: 6,
         Commerce: 16
     },
-    isInitialized = false,
-    forwarderSettings,
-    name = 'KISSmetricsForwarder',
-    reportingService,
-    id = null,
-    isTesting = false;
+    name = 'KISSmetricsForwarder';
 
-    function getEventTypeName(eventType) {
-        return mParticle.EventType.getName(eventType);
-    }
-
-    function getIdentityTypeName(identityType) {
-        return mParticle.IdentityType.getName(identityType);
-    }
-
-    function reportEvent(event) {
-        if (reportingService) {
-            reportingService(id, event);
+    var constructor = function () {
+        var self = this,
+            isInitialized = false,
+            forwarderSettings,
+            reportingService,
+            id = null,
+            isTesting = false;
+        
+        function getEventTypeName(eventType) {
+            return mParticle.EventType.getName(eventType);
         }
-    }
 
-    function processEvent(event) {
-        if (isInitialized) {
-            try {
-                if (event.EventDataType == MessageType.PageEvent || event.EventDataType == MessageType.PageView) {
-                    if (event.EventCategory == window.mParticle.EventType.Transaction) {
-                        logTransaction(event);
-                    }
-                    else {
-                        logEvent(event);
-                    }
+        function getIdentityTypeName(identityType) {
+            return mParticle.IdentityType.getName(identityType);
+        }
 
-                    reportEvent(event);
-                }
-                else if(event.EventDataType == MessageType.Commerce) {
-                    logCommerceEvent(event);
-                    reportEvent(event);
-                }
-
-                return 'Successfully sent to ' + name;
-            }
-            catch (e) {
-                return 'Failed to send to: ' + name + ' ' + e;
+        function reportEvent(event) {
+            if (reportingService) {
+                reportingService(id, event);
             }
         }
 
-        return 'Can\'t send to forwarder ' + name + ', not initialized';
-    }
-
-    function setUserAttribute(key, value) {
-        if (isInitialized) {
-            if (forwarderSettings.includeUserAttributes.toLowerCase() == 'true') {
+        function processEvent(event) {
+            if (isInitialized) {
                 try {
-                    var attributeDict = {};
-                    attributeDict[key] = value;
-                    _kmq.push(['set', attributeDict]);
+                    if (event.EventDataType == MessageType.PageEvent || event.EventDataType == MessageType.PageView) {
+                        if (event.EventCategory == window.mParticle.EventType.Transaction) {
+                            logTransaction(event);
+                        }
+                        else {
+                            logEvent(event);
+                        }
 
-                    return 'Successfully called SET API on ' + name;
+                        reportEvent(event);
+                    }
+                    else if(event.EventDataType == MessageType.Commerce) {
+                        logCommerceEvent(event);
+                        reportEvent(event);
+                    }
+
+                    return 'Successfully sent to ' + name;
                 }
                 catch (e) {
-                    return 'Failed to call SET API on ' + name + ' ' + e;
+                    return 'Failed to send to: ' + name + ' ' + e;
                 }
             }
-        } else {
-            return 'Can\'t call setUserAttribute on forwarder ' + name + ', not initialized';
+
+            return 'Can\'t send to forwarder ' + name + ', not initialized';
         }
-    }
 
-    function setUserIdentity(id, type) {
-        if (isInitialized) {
-            if (forwarderSettings.useCustomerId.toLowerCase() == 'true' &&
-                type == window.mParticle.IdentityType.CustomerId) {
+        function setUserAttribute(key, value) {
+            if (isInitialized) {
+                if (forwarderSettings.includeUserAttributes.toLowerCase() == 'true') {
+                    try {
+                        var attributeDict = {};
+                        attributeDict[key] = value;
+                        _kmq.push(['set', attributeDict]);
 
-                try {
-                    _kmq.push(['identify', id]);
-                    return 'Successfull called IDENTITY API on ' + name;
+                        return 'Successfully called SET API on ' + name;
+                    }
+                    catch (e) {
+                        return 'Failed to call SET API on ' + name + ' ' + e;
+                    }
                 }
-                catch (e) {
-                    return 'Failed to call IDENTITY API on ' + name + ' ' + e;
+            } else {
+                return 'Can\'t call setUserAttribute on forwarder ' + name + ', not initialized';
+            }
+        }
+
+        function setUserIdentity(id, type) {
+            if (isInitialized) {
+                if (forwarderSettings.useCustomerId.toLowerCase() == 'true' &&
+                    type == window.mParticle.IdentityType.CustomerId) {
+
+                    try {
+                        _kmq.push(['identify', id]);
+                        return 'Successfull called IDENTITY API on ' + name;
+                    }
+                    catch (e) {
+                        return 'Failed to call IDENTITY API on ' + name + ' ' + e;
+                    }
+                }
+                else {
+                    setUserAttribute(getIdentityTypeName(type), id);
                 }
             }
             else {
-                setUserAttribute(getIdentityTypeName(type), id);
+                return 'Can\'t call setUserIdentity on forwarder ' + name + ', not initialized';
             }
         }
-        else {
-            return 'Can\'t call setUserIdentity on forwarder ' + name + ', not initialized';
-        }
-    }
 
-    function logEvent(data) {
-        data.EventAttributes = data.EventAttributes || {};
-        data.EventAttributes['MPEventType'] = getEventTypeName(data.EventCategory);
+        function logEvent(data) {
+            data.EventAttributes = data.EventAttributes || {};
+            data.EventAttributes['MPEventType'] = getEventTypeName(data.EventCategory);
 
-        _kmq.push(['record',
-            data.EventName,
-            data.EventAttributes]);
-    }
-
-    function logTransaction(data) {
-        if (data.EventAttributes &&
-            data.EventAttributes.$MethodName &&
-            data.EventAttributes.$MethodName === 'LogEcommerceTransaction') {
-
-            // User used logTransaction method, set the event name
-            data.EventName = 'Purchased';
+            _kmq.push(['record',
+                data.EventName,
+                data.EventAttributes]);
         }
 
-        logEvent(data);
-    }
+        function logTransaction(data) {
+            if (data.EventAttributes &&
+                data.EventAttributes.$MethodName &&
+                data.EventAttributes.$MethodName === 'LogEcommerceTransaction') {
 
-    function logProductData(productList) {
-        if(productList && productList.length > 0) {
-            _kmq.push(function() {
-                productList.forEach(function(product) {
-                    KM.set( {
-                        'Product SKU': product.Sku,
-                        'Product Name': product.Name,
-                        'Category': product.Category,
-                        'Quantity': product.Quantity,
-                        'Price': product.Price,
-                        '_t': KM.ts(),
-                        '_d': 1
-                    });
-                });
-            });
+                // User used logTransaction method, set the event name
+                data.EventName = 'Purchased';
+            }
+
+            logEvent(data);
         }
-    }
 
-    function logCommerceEvent(data) {
-        var eventName,
-            attributes;
-
-        if(data.ProductAction) {
-            eventName = 'Product ' + mParticle.ProductActionType.getName(
-                data.ProductAction.ProductActionType);
-
-            if(data.ProductAction.TransactionId) {
-                attributes = {
-                    'Order ID':data.ProductAction.TransactionId,
-                    'Order Total':data.ProductAction.TotalAmount,
-                    'Order Tax': data.ProductAction.TaxAmount,
-                    'Order Shipping': data.ProductAction.ShippingAmount
-                }
-            }
-            else if(data.ProductAction.CheckoutStep) {
-                attributes = {
-                    'Checkout Step': data.ProductAction.CheckoutStep,
-                    'Checkout Options': data.ProductAction.CheckoutOptions
-                };
-            }
-
-            logProductData(data.ProductAction.ProductList);
-
-            if(attributes) {
-                _kmq.push(['record', eventName, attributes]);
-            }
-            else {
-                _kmq.push(['record', eventName]);
-            }
-        }
-        else if(data.PromotionAction) {
-            eventName = mParticle.PromotionType.getName(
-                data.PromotionAction.PromotionActionType);
-
-            if(data.PromotionAction.PromotionList) {
-                _kmq.push(function () {
-                    data.PromotionAction.PromotionList.forEach(function(promotion) {
-                        KM.set({
-                            'Promotion Id': promotion.Id,
-                            'Promotion Name': promotion.Name,
-                            'Promotion Creative': promotion.Creative,
-                            'Promotion Position': promotion.Position,
-                            '_t':KM.ts(),
-                            '_d':1
+        function logProductData(productList) {
+            if(productList && productList.length > 0) {
+                _kmq.push(function() {
+                    productList.forEach(function(product) {
+                        KM.set( {
+                            'Product SKU': product.Sku,
+                            'Product Name': product.Name,
+                            'Category': product.Category,
+                            'Quantity': product.Quantity,
+                            'Price': product.Price,
+                            '_t': KM.ts(),
+                            '_d': 1
                         });
                     });
                 });
             }
-
-            _kmq.push(['record', eventName]);
         }
-        else if(data.ProductImpressions) {
-            eventName = 'Product Impression';
 
-            _kmq.push(function () {
-                data.ProductImpressions.forEach(function(impression) {
-                    KM.set({
-                        'Impression Name': impression.Name,
-                        '_t': KM.ts(),
-                        '_d': 1
+        function logCommerceEvent(data) {
+            var eventName,
+                attributes;
+
+            if(data.ProductAction) {
+                eventName = 'Product ' + mParticle.ProductActionType.getName(
+                    data.ProductAction.ProductActionType);
+
+                if(data.ProductAction.TransactionId) {
+                    attributes = {
+                        'Order ID':data.ProductAction.TransactionId,
+                        'Order Total':data.ProductAction.TotalAmount,
+                        'Order Tax': data.ProductAction.TaxAmount,
+                        'Order Shipping': data.ProductAction.ShippingAmount
+                    }
+                }
+                else if(data.ProductAction.CheckoutStep) {
+                    attributes = {
+                        'Checkout Step': data.ProductAction.CheckoutStep,
+                        'Checkout Options': data.ProductAction.CheckoutOptions
+                    };
+                }
+
+                logProductData(data.ProductAction.ProductList);
+
+                if(attributes) {
+                    _kmq.push(['record', eventName, attributes]);
+                }
+                else {
+                    _kmq.push(['record', eventName]);
+                }
+            }
+            else if(data.PromotionAction) {
+                eventName = mParticle.PromotionType.getName(
+                    data.PromotionAction.PromotionActionType);
+
+                if(data.PromotionAction.PromotionList) {
+                    _kmq.push(function () {
+                        data.PromotionAction.PromotionList.forEach(function(promotion) {
+                            KM.set({
+                                'Promotion Id': promotion.Id,
+                                'Promotion Name': promotion.Name,
+                                'Promotion Creative': promotion.Creative,
+                                'Promotion Position': promotion.Position,
+                                '_t':KM.ts(),
+                                '_d':1
+                            });
+                        });
                     });
+                }
 
-                    logProductData(impression.ProductList);
+                _kmq.push(['record', eventName]);
+            }
+            else if(data.ProductImpressions) {
+                eventName = 'Product Impression';
+
+                _kmq.push(function () {
+                    data.ProductImpressions.forEach(function(impression) {
+                        KM.set({
+                            'Impression Name': impression.Name,
+                            '_t': KM.ts(),
+                            '_d': 1
+                        });
+
+                        logProductData(impression.ProductList);
+                    });
                 });
-            });
 
-            _kmq.push(['record', eventName]);
-        }
-    }
-
-    function initForwarder(settings, service, moduleId, testMode) {
-        forwarderSettings = settings;
-        reportingService = service;
-        id = moduleId;
-        isTesting = testMode;
-
-        try {
-            function _kms(u) {
-                setTimeout(function () {
-                    var d = document, f = d.getElementsByTagName('script')[0],
-                    s = d.createElement('script');
-                    s.type = 'text/javascript'; s.async = true; s.src = u;
-                    f.parentNode.insertBefore(s, f);
-                }, 1);
+                _kmq.push(['record', eventName]);
             }
+        }
 
-            var protocol = forwarderSettings.useSecure == 'True' ? 'https:' : '';
+        function initForwarder(settings, service, moduleId, testMode) {
+            forwarderSettings = settings;
+            reportingService = service;
+            id = moduleId;
+            isTesting = testMode;
 
-            if(testMode !== true) {
-                _kms(protocol + '//i.kissmetrics.com/i.js');
-                _kms(protocol + '//doug1izaerwt3.cloudfront.net/' + forwarderSettings.apiKey + '.1.js');
+            try {
+                function _kms(u) {
+                    setTimeout(function () {
+                        var d = document, f = d.getElementsByTagName('script')[0],
+                        s = d.createElement('script');
+                        s.type = 'text/javascript'; s.async = true; s.src = u;
+                        f.parentNode.insertBefore(s, f);
+                    }, 1);
+                }
+
+                var protocol = forwarderSettings.useSecure == 'True' ? 'https:' : '';
+
+                if(testMode !== true) {
+                    _kms(protocol + '//i.kissmetrics.com/i.js');
+                    _kms(protocol + '//doug1izaerwt3.cloudfront.net/' + forwarderSettings.apiKey + '.1.js');
+                }
+
+                isInitialized = true;
+
+                return 'Successfully initialized: ' + name;
             }
-
-            isInitialized = true;
-
-            return 'Successfully initialized: ' + name;
+            catch (e) {
+                return 'Failed to initialize: ' + name;
+            }
         }
-        catch (e) {
-            return 'Failed to initialize: ' + name;
-        }
-    }
+
+        this.init = initForwarder;
+        this.process = processEvent;
+        this.setUserIdentity = setUserIdentity;
+        this.setUserAttribute = setUserAttribute;
+    };
 
     if (!window || !window.mParticle || !window.mParticle.addForwarder) {
         return;
@@ -247,10 +256,7 @@
 
     window.mParticle.addForwarder({
         name: name,
-        init: initForwarder,
-        process: processEvent,
-        setUserIdentity: setUserIdentity,
-        setUserAttribute: setUserAttribute
+        constructor: constructor
     });
 
 })(window);
