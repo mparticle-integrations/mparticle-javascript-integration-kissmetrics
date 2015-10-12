@@ -5,8 +5,8 @@ describe('KissMetrics Forwarder', function () {
             this.id = null;
             this.event = null;
 
-            this.cb = function (id, event) {
-                self.id = id;
+            this.cb = function (forwarder, event) {
+                self.id = forwarder.id;
                 self.event = event;
             };
 
