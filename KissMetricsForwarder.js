@@ -32,6 +32,8 @@
             reportingService,
             isTesting = false;
 
+        self.name = name;
+
         function getEventTypeName(eventType) {
             return mParticle.EventType.getName(eventType);
         }
