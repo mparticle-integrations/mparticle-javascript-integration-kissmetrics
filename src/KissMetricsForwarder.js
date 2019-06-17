@@ -23,7 +23,8 @@
         OptOut: 6,
         Commerce: 16
     },
-    name = 'KISSmetricsForwarder';
+    name = 'KISSmetricsForwarder',
+    moduleId = 24;
 
     var constructor = function () {
         var self = this,
@@ -265,13 +266,29 @@
         this.setUserAttribute = setUserAttribute;
     };
 
+    function getId() {
+        return moduleId;
+    }
+
+    function register(config) {
+        if (config.kits) {
+            config.kits[name] = {
+                constructor: constructor
+            };
+        }
+    }
+
     if (!window || !window.mParticle || !window.mParticle.addForwarder) {
         return;
     }
 
     window.mParticle.addForwarder({
         name: name,
-        constructor: constructor
+        constructor: constructor,
+        getId: getId
     });
 
+    module.exports = {
+        register: register
+    };
 })(window);
