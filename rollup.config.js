@@ -21,7 +21,7 @@ export default [
     {
         input: 'src/KissMetricsForwarder.js',
         output: {
-            file: 'dist/KissMetricsForwarder.js',
+            file: 'dist/KissMetricsForwarder.iffe.js',
             format: 'iife',
             exports: 'named',
             name: 'mpKissMetricsKit',
@@ -37,7 +37,7 @@ export default [
     {
         input: 'src/KissMetricsForwarder.js',
         output: {
-            file: 'npm/KissMetricsForwarder.js',
+            file: 'dist/KissMetricsForwarder.common.js',
             format: 'cjs',
             exports: 'named',
             name: 'mpKissMetricsKit',
