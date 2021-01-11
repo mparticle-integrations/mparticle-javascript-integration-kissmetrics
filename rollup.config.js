@@ -5,22 +5,6 @@ export default [
     {
         input: 'src/KissMetricsForwarder.js',
         output: {
-            file: 'KissMetricsForwarder.js',
-            format: 'iife',
-            exports: 'named',
-            name: 'mpKissMetricsKit',
-            strict: false
-        },
-        plugins: [
-            resolve({
-                browser: true
-            }),
-            commonjs()
-        ]
-    },
-    {
-        input: 'src/KissMetricsForwarder.js',
-        output: {
             file: 'dist/KissMetricsForwarder.iffe.js',
             format: 'iife',
             exports: 'named',
